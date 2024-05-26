@@ -1,0 +1,47 @@
+{
+  "name": "narrat_back",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "prod": "SET NODE_ENV=production&&ts-node-dev --rs --poll server.ts",
+    "test": "SET NODE_ENV=test&&ts-node-dev --rs --poll server.ts",
+    "dev": "ts-node-dev --rs --poll server.ts",
+    "start": "node ./build/app.js",
+    "lint": "eslint . --ext .ts",
+    "generate-cat": "ts-node ./dev-data/import-data.ts",
+    "import-dev-data": "ts-node-dev ./dev-data/import-dev-data.ts --import",
+    "author:create": "ts-node-dev ./dev-data/import-dev-data.ts --createUser",
+    "author:delete": "ts-node-dev ./dev-data/import-dev-data.ts --delete",
+    "author:async": "ts-node-dev ./dev-data/import-dev-data.ts --asyncAuthors",
+    "book:create": "ts-node-dev ./dev-data/import-dev-data.ts --createBooks",
+    "seed": "ts-node-dev ./dev-data/seed.ts",
+    "delete-dev-data": "ts-node-dev ./dev-data/import-dev-data.ts --delete"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "bcrypt": "^5.1.1",
+    "cors": "^2.8.5",
+    "csv-parser": "^3.0.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.4.0",
+    "multer": "^1.4.5-lts.1",
+    "sharp": "^0.33.4",
+    "typescript": "^5.4.5"
+  },
+  "devDependencies": {
+    "@faker-js/faker": "^8.4.1",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/multer": "^1.4.11",
+    "@typescript-eslint/eslint-plugin": "7.9.0",
+    "@typescript-eslint/parser": "7.9.0",
+    "eslint": "^8.57.0",
+    "ts-node": "^10.9.2",
+    "ts-node-dev": "^2.0.0"
+  }
+}
