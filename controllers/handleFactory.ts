@@ -1,0 +1,1 @@
+// Dans cette partie, je vais devoir refactoriser tout mon code que j'aurai à constamment répeter

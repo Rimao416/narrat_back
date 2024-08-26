@@ -1,7 +1,6 @@
 // import mongoose from "mongoose";
 import { faker } from "@faker-js/faker";
 // import authorModel from "../models/authorModel";
-import { IAuthor } from "../models/authorModel";
 // Fonction pour générer des catégories
 
 const createFakeUsers = async () => {

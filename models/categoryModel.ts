@@ -1,8 +1,8 @@
-import mongoose, { model } from "mongoose";
+import mongoose, { Schema } from "mongoose";
 export interface ICategory {
   name: string;
 }
-const categorySchema = new mongoose.Schema<ICategory>({
+const categorySchema:Schema<ICategory> = new mongoose.Schema<ICategory>({
   name: { type: String, required: true },
 });
 categorySchema.set("toJSON", {
@@ -12,4 +12,5 @@ categorySchema.set("toJSON", {
     delete ret._id;
   },
 });
-export default model<ICategory>("Category", categorySchema);
+const categoryModel=mongoose.model<ICategory>("Category", categorySchema);
+export default categoryModel;

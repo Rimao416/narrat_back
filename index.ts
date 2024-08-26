@@ -4,10 +4,10 @@ import AppError from "./utils/appError";
 // const globalErrorHandler = require("./controllers/errorController");
 import globalErrorHandler from "./controllers/errorController";
 // const userRouter = require("./routes/userRoutes");
-import authorRoutes from "./routes/authorRoutes";
-// const categoryRouter=require("./routes/categoryRoutes")
-import bookRoutes from "./routes/bookRoutes";
-import categoryRoutes from "./routes/categoryRoutes";
+import itemRoutes from "./routes/itemRoutes";
+import "./models/itemModel";
+import "./models/categoryModel"
+
 // const authRoute = require("./routes/auth");
 const app: Application = express();
 import cors from "cors";
@@ -15,7 +15,11 @@ import cors from "cors";
 
 app.use(
   cors({
-    origin: ["http://localhost:3000", "http://localhost:5173","http://localhost:5174"],
+    origin: [
+      "http://localhost:3000",
+      "http://localhost:5173",
+      "http://localhost:5174",
+    ],
     credentials: true,
   })
 );
@@ -38,9 +42,8 @@ app.use(express.static(`${__dirname}/public`));
 // });
 
 // app.use("/api/v1/users", userRouter);
-app.use("/api/v1/authors", authorRoutes);
-app.use("/api/v1/categories", categoryRoutes);
-app.use("/api/v1/books", bookRoutes);
+app.use("/api/v1/items", itemRoutes);
+
 // app.use("/auth", authRoute);
 
 // Handle Errors
