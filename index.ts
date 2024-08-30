@@ -3,10 +3,11 @@ import AppError from "./utils/appError";
 
 // const globalErrorHandler = require("./controllers/errorController");
 import globalErrorHandler from "./controllers/errorController";
-// const userRouter = require("./routes/userRoutes");
+// import userRouter from "./routes/userRoutes";
+import authRoutes from "./routes/authRoutes";
 import itemRoutes from "./routes/itemRoutes";
 import "./models/itemModel";
-import "./models/categoryModel"
+import "./models/categoryModel";
 
 // const authRoute = require("./routes/auth");
 const app: Application = express();
@@ -44,7 +45,7 @@ app.use(express.static(`${__dirname}/public`));
 // app.use("/api/v1/users", userRouter);
 app.use("/api/v1/items", itemRoutes);
 
-// app.use("/auth", authRoute);
+app.use("/api/v1/auth", authRoutes);
 
 // Handle Errors
 

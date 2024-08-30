@@ -33,11 +33,13 @@ const deleteData = async (model: Model<any>) => {
 const createFakeUsers = async () => {
   // const users: IAuthor[] = [];
 
+  const countryCode = faker.helpers.arrayElement(["+243", "+242"]);
   await deleteData(customerModel);
 
   for (let i = 0; i < 20000; i++) {
     try {
       const newCustomer = await customerModel.create({
+        fullName: "John Doe",
         username: faker.internet.userName(),
         email: faker.internet.email(),
         password: faker.internet.password(),
@@ -46,6 +48,7 @@ const createFakeUsers = async () => {
           city: faker.location.city(),
           state: faker.location.state(),
         },
+        countryCode: countryCode,
         phoneNumber: faker.phone.imei(),
         bio: faker.lorem.sentence(),
         avatar: faker.image.avatar(),

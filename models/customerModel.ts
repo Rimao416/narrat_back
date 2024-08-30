@@ -9,7 +9,7 @@ export interface ICustomer extends IUser {
     street: string;
     city: string;
     state: string;
-    country: string;
+
   };
   phoneNumber: string;
   bio: string;
@@ -30,18 +30,17 @@ const customerSchema: Schema<ICustomer> = new mongoose.Schema<ICustomer>(
       street: { type: String, required: true },
       city: { type: String, required: true },
       state: { type: String, required: true },
-      country: { type: String, required: true },
     },
     phoneNumber: { type: String, required: true },
     bio: { type: String, required: true },
     countryCode: {
       type: String,
-      validate: {
-        validator: function (value: string) {
-          return value.length === 2;
-        },
-        message: "Le code de pays doit contenir deux caractères",
-      },
+      // validate: {
+      //   validator: function (value: string) {
+      //     return value.length === 3;
+      //   },
+      //   message: "Le code de pays doit contenir deux caractères",
+      // },
       enum: {
         values: ["+243", "+242"],
         message: "Le code pays doit être +243 ou +242.",
