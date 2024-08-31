@@ -11,6 +11,8 @@ export interface IUser {
   avatar: string;
   createdAt: Date;
   updatedAt: Date;
+  otp: string;
+  otpExpires: Date;
 }
 const userSchema = new mongoose.Schema<IUser>(
   {
@@ -45,12 +47,18 @@ const userSchema = new mongoose.Schema<IUser>(
     },
     status: {
       type: String,
-      enum: ["active", "inactive"],
-      default: "active",
+      enum: ["active", "inactive", "pending"],
+      default: "pending",
     },
     avatar: {
       type: String,
       default: "default.png",
+    },
+    otp: {
+      type: String,
+    },
+    otpExpires: {
+      type: Date,
     },
   },
   {

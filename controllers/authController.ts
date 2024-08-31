@@ -16,6 +16,7 @@ import Joi from "joi";
 // Schema de validation avec Joi, incluant une validation personnalisée pour le numéro de téléphone
 const userSchema = Joi.object({
   type: Joi.string().default("phone"),
+  countryCode: Joi.string().default("+243"),
   fullName: Joi.string()
     .pattern(/^[a-zA-Z\s]+$/)
     .not()
@@ -83,9 +84,21 @@ export const validateUserInput = async (
     });
 
     req.body = value;
+    // Save the user in the database
+    console.log(req.body);
     const { type } = req.body;
+    const customer = new customerModel({
+      ...req.body,
+      otpExpires: new Date(Date.now() + 3 * 60 * 60 * 1000),
+      otpCode: Math.floor(100000 + Math.random() * 900000),
+    });
+
+    // Sauvegarde l'instance dans la base de données
+    await customer.save({
+      validateBeforeSave: false,
+    });
+
     if (type === "phone") {
-      console.log("Je commence le parcours");
       // Send otp code to phone number using twilio`
       const client = twilio(
         process.env.TWILIO_SID,
@@ -96,6 +109,7 @@ export const validateUserInput = async (
       client.messages
         .create({
           from: process.env.FROM_TWILLIO_NUMBER,
+          // to:req.body.countryCode+req.body.phoneNumber
           to: "+21656609671",
           body: `Votre code d'activation est : ${otp}`,
         })

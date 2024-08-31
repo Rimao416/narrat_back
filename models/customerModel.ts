@@ -9,7 +9,6 @@ export interface ICustomer extends IUser {
     street: string;
     city: string;
     state: string;
-
   };
   phoneNumber: string;
   bio: string;
@@ -55,6 +54,13 @@ const customerSchema: Schema<ICustomer> = new mongoose.Schema<ICustomer>(
     timestamps: true, // Automatically add createdAt and updatedAt fields
   }
 );
+customerSchema.methods.generateOtp = function () {
+  const otp = Math.floor(100000 + Math.random() * 900000);
+  this.otp = otp;
+  this.otpExpires = new Date(Date.now() + 3 * 60 * 60 * 1000);
+
+  return otp;
+};
 
 customerSchema.set("toObject", { virtuals: true });
 customerSchema.set("toJSON", { virtuals: true });
