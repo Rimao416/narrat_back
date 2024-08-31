@@ -1,4 +1,5 @@
 import { NextFunction, Request, Response } from "express";
+import twilio from "twilio";
 // import AppError from "../utils/appError";
 import jwt from "jsonwebtoken";
 import customerModel from "../models/customerModel";
@@ -11,14 +12,10 @@ import Joi from "joi";
 //   console.log(user);
 //   return !!user;
 // };
-const checkPhoneNumberExists = async (phoneNumber: string): Promise<boolean> => {
-  // Utilisation de `exists` pour vérifier l'existence du numéro de téléphone
-  const exists = await customerModel.exists({ phoneNumber });
-  return !!exists;
-};
 
 // Schema de validation avec Joi, incluant une validation personnalisée pour le numéro de téléphone
 const userSchema = Joi.object({
+  type: Joi.string().default("phone"),
   fullName: Joi.string()
     .pattern(/^[a-zA-Z\s]+$/)
     .not()
@@ -31,10 +28,10 @@ const userSchema = Joi.object({
       "string.empty": "Le nom complet ne peut pas être vide.",
       "any.required": "Le nom complet est requis.",
     }),
+
   phoneNumber: Joi.string()
     .length(9)
     .pattern(/^[1-9][0-9]{8}$/)
-    .required()
     .messages({
       "string.pattern.base":
         "Le numéro de téléphone doit être composé de 9 chiffres et ne doit pas commencer par 0.",
@@ -42,46 +39,99 @@ const userSchema = Joi.object({
         "Le numéro de téléphone doit contenir exactement 9 chiffres.",
       "string.empty": "Le numéro de téléphone ne peut pas être vide.",
       "any.required": "Le numéro de téléphone est requis.",
-    })
-    .custom(async (value, helpers) => {
-      // Vérifier si le numéro de téléphone existe déjà
-      const phoneNumberExists = await checkPhoneNumberExists(value);
+    }),
+
+  email: Joi.string().email().lowercase().messages({
+    "string.email": "L'email doit être une adresse email valide.",
+    "string.empty": "L'email ne peut pas être vide.",
+    "any.required": "L'email est requis.",
+  }),
+})
+  .or("phoneNumber", "email") // Ensures that at least one of the fields is present
+  .external(async (value: any) => {
+    if (value.phoneNumber) {
+      const phoneNumberExists = await customerModel.findOne({
+        phoneNumber: value.phoneNumber,
+      });
+
       if (phoneNumberExists) {
-        // Utiliser helpers.error pour renvoyer le message d'erreur personnalisé
-        return helpers.error("any.custom", {
-          message: "Le numéro de téléphone est déjà utilisé.",
-        });
+        throw new Error("Le numéro de téléphone est déjà utilisé.");
       }
-      return value;
-    }, "Phone number check"),
-});
+    }
 
-export const validateUserInput = catchAsync(
-  async (req: Request, res: Response, next: NextFunction) => {
-    const { error, value } = userSchema.validate(req.body, {
-      abortEarly: false, // Capture toutes les erreurs
+    if (value.email) {
+      const emailExists = await customerModel.findOne({
+        email: value.email,
+      });
+
+      if (emailExists) {
+        throw new Error("L'email est déjà utilisé.");
+      }
+    }
+
+    return value;
+  });
+// SCREEN 1: Fullname and phone number or email
+export const validateUserInput = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const value = await userSchema.validateAsync(req.body, {
+      abortEarly: false,
     });
-    console.log(error);
-    // console.log(value);
-    if (error) {
-      const validationErrors: { [key: string]: string } = {};
 
-      error.details.forEach((detail) => {
+    req.body = value;
+    const { type } = req.body;
+    if (type === "phone") {
+      console.log("Je commence le parcours");
+      // Send otp code to phone number using twilio`
+      const client = twilio(
+        process.env.TWILIO_SID,
+        process.env.TWILIO_AUTH_TOKEN
+      );
+
+      const otp = Math.floor(1000 + Math.random() * 9000);
+      client.messages
+        .create({
+          from: process.env.FROM_TWILLIO_NUMBER,
+          to: "+21656609671",
+          body: `Votre code d'activation est : ${otp}`,
+        })
+        .then((res) => {
+          console.log("Message sent:", res.sid);
+        })
+        .catch((e: Error) => {
+          console.error("Failed to send message:", e.message);
+        });
+    } else if (type === "email") {
+      // Send otp code to email
+    }
+    next();
+  } catch (error: any) {
+    const validationErrors: { [key: string]: string } = {};
+
+    if (error.details) {
+      error.details.forEach((detail: any) => {
         const path = detail.path.join(".");
         validationErrors[path] = detail.message;
       });
-
-      return res.status(400).json({
-        status: "error",
-        message: "La validation a échoué",
-        errors: validationErrors,
-      });
+    } else {
+      const message = error.message.replace(/\s*\(value\)$/, "");
+      error.message.includes("numéro")
+        ? (validationErrors.phoneNumber = message)
+        : (validationErrors.email = message);
     }
 
-    req.body = value;
-    next();
+    return res.status(400).json({
+      status: "error",
+      message: "La validation a échoué",
+      errors: validationErrors,
+    });
   }
-);
+};
+// SCREEN 2: Send otp code to phone number or email
 
 const signToken = (id: string) => {
   return jwt.sign({ id }, process.env.JWT_SECRET!, {
