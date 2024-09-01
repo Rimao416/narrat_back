@@ -20,6 +20,7 @@ export interface ICustomer extends IUser {
   averageRating: number;
   createdAt: Date;
   updatedAt: Date;
+  type: string;
 }
 
 // Mongoose Schema for Customer
@@ -49,6 +50,7 @@ const customerSchema: Schema<ICustomer> = new mongoose.Schema<ICustomer>(
     items: [{ type: mongoose.Schema.Types.ObjectId, ref: "Item" }],
     ratings: [{ type: mongoose.Schema.Types.ObjectId, ref: "Rating" }],
     averageRating: { type: Number, default: 0 },
+    type: { type: String, enum: ["phone", "email"], default: "phone" },
   },
   {
     timestamps: true, // Automatically add createdAt and updatedAt fields

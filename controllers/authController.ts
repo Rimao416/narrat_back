@@ -47,31 +47,8 @@ const userSchema = Joi.object({
     "string.empty": "L'email ne peut pas être vide.",
     "any.required": "L'email est requis.",
   }),
-})
-  .or("phoneNumber", "email") // Ensures that at least one of the fields is present
-  .external(async (value: any) => {
-    if (value.phoneNumber) {
-      const phoneNumberExists = await customerModel.findOne({
-        phoneNumber: value.phoneNumber,
-      });
+}).or("phoneNumber", "email"); // Ensures that at least one of the fields is present
 
-      if (phoneNumberExists) {
-        throw new Error("Le numéro de téléphone est déjà utilisé.");
-      }
-    }
-
-    if (value.email) {
-      const emailExists = await customerModel.findOne({
-        email: value.email,
-      });
-
-      if (emailExists) {
-        throw new Error("L'email est déjà utilisé.");
-      }
-    }
-
-    return value;
-  });
 // SCREEN 1: Fullname and phone number or email
 export const validateUserInput = async (
   req: Request,
@@ -85,43 +62,98 @@ export const validateUserInput = async (
 
     req.body = value;
     // Save the user in the database
-    console.log(req.body);
+
     const { type } = req.body;
-    const customer = new customerModel({
-      ...req.body,
-      otpExpires: new Date(Date.now() + 3 * 60 * 60 * 1000),
-      otpCode: Math.floor(100000 + Math.random() * 900000),
+    // Vérifier si l'utilisateur existe
+    const user = await customerModel.findOne({
+      $or: [{ phoneNumber: req.body.phoneNumber }, { email: req.body.email }],
     });
+    if (user) {
+      // Si l'utilisateur existe et a un compte actif
+      if (user.status === "active") {
+        // Rediriger vers la page d'accès
+        const errorKey = user.type === "phone" ? "phoneNumber" : "email";
 
-    // Sauvegarde l'instance dans la base de données
-    await customer.save({
-      validateBeforeSave: false,
-    });
-
-    if (type === "phone") {
-      // Send otp code to phone number using twilio`
-      const client = twilio(
-        process.env.TWILIO_SID,
-        process.env.TWILIO_AUTH_TOKEN
-      );
-
-      const otp = Math.floor(1000 + Math.random() * 9000);
-      client.messages
-        .create({
-          from: process.env.FROM_TWILLIO_NUMBER,
-          // to:req.body.countryCode+req.body.phoneNumber
-          to: "+21656609671",
-          body: `Votre code d'activation est : ${otp}`,
-        })
-        .then((res) => {
-          console.log("Message sent:", res.sid);
-        })
-        .catch((e: Error) => {
-          console.error("Failed to send message:", e.message);
+        res.status(400).json({
+          status: "error",
+          message: "Ce compte existe déjà. Veuillez vous connecter.",
+          errors: {
+            [errorKey]: "Ce compte existe déjà. Veuillez vous connecter.",
+          },
         });
-    } else if (type === "email") {
-      // Send otp code to email
+      } else if (user.status === "pending") {
+        if (user.otpExpires.getTime() < Date.now()) {
+          // Dans ce cas, l'utilisateur existe mais son token a expiré
+          if (type === "phone") {
+            // Send otp code to phone number using twilio`
+            const client = twilio(
+              process.env.TWILIO_SID,
+              process.env.TWILIO_AUTH_TOKEN
+            );
+
+            const otp = Math.floor(100000 + Math.random() * 900000);
+
+            user.otp = otp.toString();
+            user.otpExpires = new Date(Date.now() + 3 * 60 * 60 * 1000);
+
+            await user.save({ validateBeforeSave: false });
+            client.messages
+              .create({
+                from: process.env.FROM_TWILLIO_NUMBER,
+                // to:req.body.countryCode+req.body.phoneNumber
+                to: "+21656609671",
+                body: `Votre code d'activation est : ${otp}`,
+              })
+              .then((res) => {
+                console.log("Message sent:", res.sid);
+              })
+              .catch((e: Error) => {
+                console.error("Failed to send message:", e.message);
+              });
+          } else if (type === "email") {
+            // Send otp code to email
+          }
+        }
+      }
+    } else {
+      // const otp = Math.floor(100000 + Math.random() * 900000);
+      const otp = Math.floor(100000 + Math.random() * 900000);
+      const customer = new customerModel({
+        ...req.body,
+        // otpExpires: new Date(Date.now() + 1 * 60 * 1000),
+        otpExpires: new Date(Date.now() + 3 * 60 * 60 * 1000),
+        otp,
+      });
+      if (type === "phone") {
+        // Send otp code to phone number using twilio`
+        const client = twilio(
+          process.env.TWILIO_SID,
+          process.env.TWILIO_AUTH_TOKEN
+        );
+
+        client.messages
+          .create({
+            from: process.env.FROM_TWILLIO_NUMBER,
+            // to:req.body.countryCode+req.body.phoneNumber
+            to: "+21656609671",
+            body: `Votre code d'activation est : ${otp}`,
+          })
+          .then((res) => {
+            console.log("Message sent:", res.sid);
+          })
+          .catch((e: Error) => {
+            console.error("Failed to send message:", e.message);
+          });
+      } else if (type === "email") {
+        // Send otp code to email
+      }
+
+      // Sauvegarde l'instance dans la base de données
+      await customer.save({
+        validateBeforeSave: false,
+      });
     }
+
     next();
   } catch (error: any) {
     const validationErrors: { [key: string]: string } = {};
