@@ -21,6 +21,8 @@ export interface ICustomer extends IUser {
   createdAt: Date;
   updatedAt: Date;
   type: string;
+
+
 }
 
 // Mongoose Schema for Customer

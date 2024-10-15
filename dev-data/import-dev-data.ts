@@ -153,7 +153,7 @@ const deleteAllItemsAndRemoveReferences = async () => {
 
 const seedCategories = async () => {
   try {
-    await categoryModel.deleteMany({}); // Clear existing categories
+    // await categoryModel.deleteMany({}); // Clear existing categories
     const createdCategories = await categoryModel.create(categories);
     console.log("Categories seeded successfully:", createdCategories);
   } catch (error) {

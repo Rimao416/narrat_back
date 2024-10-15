@@ -4,172 +4,86 @@ import twilio from "twilio";
 import jwt from "jsonwebtoken";
 import customerModel from "../models/customerModel";
 import catchAsync from "../utils/catchAsync";
-import Joi from "joi";
 
-// Fonction pour vérifier si le numéro de téléphone existe déjà
-// const checkPhoneNumberExists = async (numberPhone: string) => {
-//   const user = await customerModel.findOne({ phoneNumber: numberPhone });
-//   console.log(user);
-//   return !!user;
-// };
-
-// Schema de validation avec Joi, incluant une validation personnalisée pour le numéro de téléphone
-const userSchema = Joi.object({
-  type: Joi.string().default("phone"),
-  countryCode: Joi.string().default("+243"),
-  fullName: Joi.string()
-    .pattern(/^[a-zA-Z\s]+$/)
-    .not()
-    .empty()
-    .required()
-    .messages({
-      "string.base": "Le nom complet doit être une chaîne de caractères.",
-      "string.pattern.base":
-        "Le nom complet ne doit contenir que des lettres et des espaces.",
-      "string.empty": "Le nom complet ne peut pas être vide.",
-      "any.required": "Le nom complet est requis.",
-    }),
-
-  phoneNumber: Joi.string()
-    .length(9)
-    .pattern(/^[1-9][0-9]{8}$/)
-    .messages({
-      "string.pattern.base":
-        "Le numéro de téléphone doit être composé de 9 chiffres et ne doit pas commencer par 0.",
-      "string.length":
-        "Le numéro de téléphone doit contenir exactement 9 chiffres.",
-      "string.empty": "Le numéro de téléphone ne peut pas être vide.",
-      "any.required": "Le numéro de téléphone est requis.",
-    }),
-
-  email: Joi.string().email().lowercase().messages({
-    "string.email": "L'email doit être une adresse email valide.",
-    "string.empty": "L'email ne peut pas être vide.",
-    "any.required": "L'email est requis.",
-  }),
-}).or("phoneNumber", "email"); // Ensures that at least one of the fields is present
+import sendEmail from "../utils/email";
+import { generateEmailTemplate } from "../utils/mailTemplate";
+import { otpSchema, passwordSchema, userSchema } from "./validate";
 
 // SCREEN 1: Fullname and phone number or email
-export const validateUserInput = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
+interface CustomRequest extends Request {
+  user?: typeof customerModel.prototype; // Utilisation du type de l'instance de modèle // Remplacez `CustomerModel` par le type correct de votre modèle utilisateur
+}
+export const validateUserInput = async (req: CustomRequest, res: Response) => {
   try {
-    const value = await userSchema.validateAsync(req.body, {
+    // Validation des données d'entrée
+    const validatedData = await userSchema.validateAsync(req.body, {
       abortEarly: false,
     });
+    req.body = validatedData;
 
-    req.body = value;
-    // Save the user in the database
+    const { type, phoneNumber, email } = req.body;
+    // Vérification de l'existence de l'utilisateur
+    type queryProps = {
+      phoneNumber?: string;
+      email?: string;
+    };
+    const query: queryProps = {};
 
-    const { type } = req.body;
-    // Vérifier si l'utilisateur existe
-    const user = await customerModel.findOne({
-      $or: [{ phoneNumber: req.body.phoneNumber }, { email: req.body.email }],
-    });
+    if (phoneNumber) {
+      query.phoneNumber = phoneNumber;
+    } else if (email) {
+      query.email = email.toLowerCase();
+    }
+
+    const user = await customerModel.findOne(query);
+    // console.log(user)
     if (user) {
-      // Si l'utilisateur existe et a un compte actif
       if (user.status === "active") {
-        // Rediriger vers la page d'accès
         const errorKey = user.type === "phone" ? "phoneNumber" : "email";
-
-        res.status(400).json({
+        return res.status(400).json({
           status: "error",
           message: "Ce compte existe déjà. Veuillez vous connecter.",
           errors: {
             [errorKey]: "Ce compte existe déjà. Veuillez vous connecter.",
           },
         });
-      } else if (user.status === "pending") {
-        if (user.otpExpires.getTime() < Date.now()) {
-          // Dans ce cas, l'utilisateur existe mais son token a expiré
-          if (type === "phone") {
-            // Send otp code to phone number using twilio`
-            const client = twilio(
-              process.env.TWILIO_SID,
-              process.env.TWILIO_AUTH_TOKEN
-            );
+      }
+      // Si true, cela veut dire que l'Otp a expiré
+      if (user.status === "pending") {
+        if (user.otpExpires && user.otpExpires.getTime() < Date.now()) {
+          console.log("ici");
+          const otp = generateOtp();
+          await sendOtp(user, otp, type);
+          user.otp = otp.toString();
+          user.otpExpires = new Date(Date.now() + 3 * 60 * 60 * 1000);
 
-            const otp = Math.floor(100000 + Math.random() * 900000);
-
-            user.otp = otp.toString();
-            user.otpExpires = new Date(Date.now() + 3 * 60 * 60 * 1000);
-
-            await user.save({ validateBeforeSave: false });
-            client.messages
-              .create({
-                from: process.env.FROM_TWILLIO_NUMBER,
-                // to:req.body.countryCode+req.body.phoneNumber
-                to: "+21656609671",
-                body: `Votre code d'activation est : ${otp}`,
-              })
-              .then((res) => {
-                console.log("Message sent:", res.sid);
-              })
-              .catch((e: Error) => {
-                console.error("Failed to send message:", e.message);
-              });
-          } else if (type === "email") {
-            // Send otp code to email
-          }
+          await user.save({ validateBeforeSave: false });
         }
       }
+      req.user = user;
     } else {
-      // const otp = Math.floor(100000 + Math.random() * 900000);
-      const otp = Math.floor(100000 + Math.random() * 900000);
-      const customer = new customerModel({
+      // Si l'utilisateur n'est pas encore dans la base de donnée
+      console.log("là");
+      const otp = generateOtp();
+      await sendOtp(user, otp, type);
+
+      const newUser = new customerModel({
         ...req.body,
-        // otpExpires: new Date(Date.now() + 1 * 60 * 1000),
         otpExpires: new Date(Date.now() + 3 * 60 * 60 * 1000),
         otp,
       });
-      if (type === "phone") {
-        // Send otp code to phone number using twilio`
-        const client = twilio(
-          process.env.TWILIO_SID,
-          process.env.TWILIO_AUTH_TOKEN
-        );
 
-        client.messages
-          .create({
-            from: process.env.FROM_TWILLIO_NUMBER,
-            // to:req.body.countryCode+req.body.phoneNumber
-            to: "+21656609671",
-            body: `Votre code d'activation est : ${otp}`,
-          })
-          .then((res) => {
-            console.log("Message sent:", res.sid);
-          })
-          .catch((e: Error) => {
-            console.error("Failed to send message:", e.message);
-          });
-      } else if (type === "email") {
-        // Send otp code to email
-      }
-
-      // Sauvegarde l'instance dans la base de données
-      await customer.save({
-        validateBeforeSave: false,
-      });
+      await sendOtp(newUser, otp, type);
+      await newUser.save({ validateBeforeSave: false });
+      req.user = newUser;
     }
 
-    next();
+    return res.status(200).json({
+      status: "success",
+      message: "Validation reussie",
+    });
   } catch (error: any) {
-    const validationErrors: { [key: string]: string } = {};
-
-    if (error.details) {
-      error.details.forEach((detail: any) => {
-        const path = detail.path.join(".");
-        validationErrors[path] = detail.message;
-      });
-    } else {
-      const message = error.message.replace(/\s*\(value\)$/, "");
-      error.message.includes("numéro")
-        ? (validationErrors.phoneNumber = message)
-        : (validationErrors.email = message);
-    }
-
+    const validationErrors = handleValidationError(error);
     return res.status(400).json({
       status: "error",
       message: "La validation a échoué",
@@ -177,7 +91,187 @@ export const validateUserInput = async (
     });
   }
 };
-// SCREEN 2: Send otp code to phone number or email
+// export const validateOtp = async (req: CustomRequest, res: Response) => {
+//     if (req.user.otp !== otp) {
+//       return res.status(400).json({
+//         status: "error",
+//         message: "La validation a échoué",
+//         errors: { otp: "Code OTP invalide" },
+//       });
+//     }
+
+//     // Vérifiez si l'OTP a expiré
+//     if (req.user.otpExpires.getTime() < Date.now()) {
+//       return res.status(400).json({
+//         status: "error",
+//         message: "La validation a échoué",
+//         errors: { otp: "Code OTP expiré" },
+//       });
+//     }
+
+//     // Si l'OTP est valide, continuez le processus d'authentification
+
+//     req.user.otp = undefined; // Supprimez l'OTP après vérification réussie
+//     req.user.otpExpires = undefined; // Supprimez la date d'expiration de l'OTP
+//     await req.user.save({ validateBeforeSave: false }); // Sauvegardez les modifications
+
+//     return res.status(200).json({
+//       status: "success",
+//       message: "Validation reussie",
+//     });
+//   }
+// Fonction pour générer un OTP
+export const validateOtp = async (req: CustomRequest, res: Response) => {
+  const { error } = otpSchema.validate(req.body);
+  if (error)
+    return res.status(400).json({ errors: { otp: error.details[0].message } });
+
+  const { phoneNumber, email, otp } = req.body;
+  console.log("Tu as envoyé "+otp)
+  type queryProps = {
+    phoneNumber?: string;
+    email?: string;
+    status?: string; 
+  };
+  const query: queryProps = { status: "pending" }; // Ajout de la condition pour le statut "pending"
+
+
+  if (phoneNumber) {
+    query.phoneNumber = phoneNumber;
+  } else if (email) {
+    query.email = email.toLowerCase();
+  }
+
+  const user = await customerModel.findOne(query);
+
+  if (!user) {
+    return res.status(400).json({
+      status: "error",
+      message: "Ce compte n'existe pas. Veuillez vous inscrire.",
+      errors: {
+        otp: "Ce compte n'existe pas. Veuillez vous inscrire.",
+      },
+    });
+  } else {
+    if (user.otp !== otp) {
+      return res.status(400).json({
+        status: "error",
+        message: "La validation a échoué",
+        errors: { otp: "Code OTP invalide" },
+      });
+    }
+
+    // Vérifiez si l'OTP a expiré
+    if (user.otpExpires && user.otpExpires.getTime() < Date.now()) {
+      return res.status(400).json({
+        status: "error",
+        message: "La validation a échoué",
+        errors: { otp: "Code OTP expiré" },
+      });
+    }
+
+    // Si l'OTP est valide, continuez le processus d'authentification
+    res.status(200).json({
+      status: "success",
+      message: "Validation reussie",
+    });
+  }
+  // Votre logique pour vérifier l'OTP dans la base de données ici...
+
+
+};
+export const validatePassword = async (req: CustomRequest, res: Response) => {
+  const { error } = passwordSchema.validate(req.body);
+  if (error)
+    return res
+      .status(400)
+      .json({ errors: { password: error.details[0].message } });
+
+  const { phoneNumber, email, password } = req.body;
+  type queryProps = {
+    phoneNumber?: string;
+    email?: string;
+  
+  };
+  const query: queryProps = {};
+
+  if (phoneNumber) {
+    query.phoneNumber = phoneNumber;
+  } else if (email) {
+    query.email = email.toLowerCase();
+  }
+
+  const user = await customerModel.findOne(query);
+
+  if (!user) {
+    return res.status(400).json({
+      status: "error",
+      message: "Ce compte n'existe pas. Veuillez vous inscrire.",
+      errors: {
+        password: "Ce compte n'existe pas. Veuillez vous inscrire.",
+      },
+    });
+  } else if(user.status === "active" && user.otp==undefined){ 
+    // Vérifiez si le mot de passe est valide
+    res.status(400).json({
+      status: "error",
+      message:"Erreur",
+      errors: { password: "Ce compte existe déjà. Veuillez vous inscrire avec une autre adresse email ou un autre numéro de téléphone." },
+    });
+
+  }else{
+    user.password = password;
+    await user.save({validateBeforeSave:false});
+    res.status(200).json({
+      status: "success",
+      message: "Mot de passe mis à jour avec succès.",
+    });
+  }
+};
+const generateOtp = () => Math.floor(100000 + Math.random() * 900000);
+
+// Fonction pour envoyer un OTP par téléphone ou email
+const sendOtp = async (user: any, otp: number, type: string) => {
+  if (type === "phone") {
+    const client = twilio(
+      process.env.TWILIO_SID,
+      process.env.TWILIO_AUTH_TOKEN
+    );
+    await client.messages.create({
+      from: process.env.FROM_TWILLIO_NUMBER,
+      to: "+21656609671",
+      body: `Votre code d'activation est : ${otp}`,
+    });
+  } else if (type === "email") {
+    const message = generateEmailTemplate(user.fullName, otp.toString());
+    await sendEmail(user.email, "Code d'activation", message);
+  }
+};
+
+// Fonction pour gérer les erreurs de validation
+const handleValidationError = (error: any) => {
+  const validationErrors: { [key: string]: string } = {};
+
+  if (error.details) {
+    error.details.forEach((detail: any) => {
+      const path = detail.path.join(".");
+      validationErrors[path] = detail.message;
+    });
+  } else {
+    const message = error.message.replace(/\s*\(value\)$/, "");
+    if (
+      error.message.includes("numéro") ||
+      error.message.includes("Phone") ||
+      error.message.includes("Number")
+    ) {
+      validationErrors.phoneNumber = message;
+    } else {
+      validationErrors.email = message;
+    }
+  }
+
+  return validationErrors;
+};
 
 const signToken = (id: string) => {
   return jwt.sign({ id }, process.env.JWT_SECRET!, {

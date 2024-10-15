@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import bcrypt from "bcrypt";
 
 export interface IUser {
   id: string;
@@ -11,8 +12,8 @@ export interface IUser {
   avatar: string;
   createdAt: Date;
   updatedAt: Date;
-  otp: string;
-  otpExpires: Date;
+  otp?: string;
+  otpExpires?: Date;
 }
 const userSchema = new mongoose.Schema<IUser>(
   {
@@ -65,4 +66,21 @@ const userSchema = new mongoose.Schema<IUser>(
     timestamps: true,
   }
 );
+userSchema.pre("save", async function (next) {
+  // Only run this function if password was actually modified
+  if (!this.isModified("password")) return next();
+
+  // Email adress should be in lower
+
+
+  // Hash the password with cost of 12
+  this.password = await bcrypt.hash(this.password, 12);
+  this.otp = undefined;
+  this.otpExpires = undefined;
+  this.status = "active";
+
+  next();
+
+  // Delete passwordConfirm field
+});
 export default mongoose.model<IUser>("User", userSchema);

@@ -49,11 +49,11 @@ const itemSchema: Schema<IItem> = new mongoose.Schema<IItem>(
           type: {
             type: String,
             enum: ["image", "video"],
-            required: true,
+            // required: true,
           },
           url: {
             type: String,
-            required: true,
+            // required: true,
           },
         },
       ],
