@@ -9,7 +9,7 @@ export interface IItem extends Document {
   categories: mongoose.Schema.Types.ObjectId[] | string[]; // Reference to categories
   condition: "new" | "used";
   // media: { type: "image" | "video"; url: string }[];
-  media: { type: "image" | "video"; url: string }[];
+  images: string[];
   seller: mongoose.Schema.Types.ObjectId; // Reference to the user who is selling the item
   likes: mongoose.Schema.Types.ObjectId[];
   createdAt: Date;
@@ -43,27 +43,16 @@ const itemSchema: Schema<IItem> = new mongoose.Schema<IItem>(
       enum: ["new", "used"],
       required: [true, "Veuillez renseigner l'état de l'article"],
     },
-    media: {
-      type: [
-        {
-          type: {
-            type: String,
-            enum: ["image", "video"],
-            // required: true,
-          },
-          url: {
-            type: String,
-            // required: true,
-          },
-        },
-      ],
+    images:{
+      type: [String],
+      required: [true, "Veuillez renseigner les images de l'article"],
       validate: {
-        validator: function (v: { type: "image" | "video"; url: string }[]) {
-          return v.length <= 8;
+        validator: function (value: string[]) {
+          return value.length > 0;
         },
-        message: "Vous ne pouvez pas ajouter plus de 8 médias.",
+        message: "Veuillez renseigner au moins une image de l'article",
       },
-      default: [],
+
     },
     seller: {
       type: mongoose.Schema.Types.ObjectId,
@@ -78,14 +67,7 @@ const itemSchema: Schema<IItem> = new mongoose.Schema<IItem>(
 );
 
 // Custom validation to check the total number of media
-itemSchema.pre("validate", function (next) {
-  const item = this as IItem;
-  if (item.media.length > 8) {
-    next(new Error("Le total des images et vidéos ne peut pas dépasser 8."));
-  } else {
-    next();
-  }
-});
+
 itemSchema.pre(
   "deleteOne",
   { document: true, query: false },

@@ -16,6 +16,7 @@
     "item:delete": "ts-node-dev ./dev-data/import-dev-data.ts --deleteAllItems",
     "item:delete-better": "ts-node-dev ./dev-data/import-dev-data.ts --deleteAllItemsAndRemoveReferences",
     "category:create": "ts-node-dev ./dev-data/import-dev-data.ts --seedCategories",
+    "subcategory:create": "ts-node-dev ./dev-data/import-dev-data.ts --addSubcategory",
     "author:delete": "ts-node-dev ./dev-data/import-dev-data.ts --delete",
     "author:async": "ts-node-dev ./dev-data/import-dev-data.ts --asyncAuthors",
     "book:create": "ts-node-dev ./dev-data/import-dev-data.ts --createBooks",
@@ -23,7 +24,9 @@
     "author:addCountryCode": "ts-node-dev ./dev-data/import-dev-data.ts --addCountry",
     "seed": "ts-node-dev ./dev-data/seed.ts",
     "delete-dev-data": "ts-node-dev ./dev-data/import-dev-data.ts --delete",
-    "author:deleteCountry": "ts-node-dev ./dev-data/import-dev-data.ts --deleteCountry"
+    "author:deleteCountry": "ts-node-dev ./dev-data/import-dev-data.ts --deleteCountry",
+    "thanos": "ts-node-dev ./dev-data/import-dev-data.ts --thanos",
+    "all:create": "ts-node-dev ./dev-data/import-dev-data.ts --createAll"
   },
   "keywords": [],
   "author": "Kayumba Omari",

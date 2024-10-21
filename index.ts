@@ -6,6 +6,8 @@ import globalErrorHandler from "./controllers/errorController";
 // import userRouter from "./routes/userRoutes";
 import authRoutes from "./routes/authRoutes";
 import itemRoutes from "./routes/itemRoutes";
+import subCategoryRoutes from "./routes/subcategoryRoutes"
+import categoryRoutes from "./routes/categoryRoutes"
 import "./models/itemModel";
 import "./models/categoryModel";
 
@@ -46,6 +48,8 @@ app.use(express.static(`${__dirname}/public`));
 app.use("/api/v1/items", itemRoutes);
 
 app.use("/api/v1/auth", authRoutes);
+app.use("/api/v1/subcategories", subCategoryRoutes);
+app.use("/api/v1/categories", categoryRoutes);
 
 // Handle Errors
 

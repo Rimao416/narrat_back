@@ -1,11 +1,15 @@
 import mongoose, { Model } from "mongoose";
 import dotenv from "dotenv";
+import fs from "fs";
+import path from "path";
 import { faker } from "@faker-js/faker";
 import customerModel from "../models/customerModel";
 import ratingModel from "../models/ratingModel";
 import itemModel from "../models/itemModel";
 import categoryModel from "../models/categoryModel";
-import { categories } from "./seed";
+import { allSubCategories, categories } from "./seed";
+import subCategoryModel from "../models/subCategoryModel";
+
 dotenv.config({ path: "./config.env" });
 
 const database: string = process.env.DATABASE_TEST ?? "";
@@ -16,6 +20,19 @@ mongoose.set("strictQuery", true);
 mongoose.connect(DB).then(() => {
   console.log("Connexion réussie");
 });
+
+const getUserImagesFromJson = () => {
+  const filePath = path.join(__dirname, "fichiers.json");
+  const rawData = fs.readFileSync(filePath, "utf-8");
+  const files = JSON.parse(rawData);
+
+  // Filtrer les chemins dont le nom commence par "user"
+  return files
+    .filter((file: { nom: string }) =>
+      file.nom.toLowerCase().startsWith("user")
+    )
+    .map((file: { nom: string }) => path.join(file.nom)); // Construire le chemin complet vers l’image
+};
 
 //   import data into DB
 
@@ -34,9 +51,9 @@ const createFakeUsers = async () => {
   // const users: IAuthor[] = [];
 
   const countryCode = faker.helpers.arrayElement(["+243", "+242"]);
-  await deleteData(customerModel);
+  const userImages = getUserImagesFromJson(); // Récupérer les chemins des images
 
-  for (let i = 0; i < 20000; i++) {
+  for (const imagePath of userImages) {
     try {
       const newCustomer = await customerModel.create({
         fullName: "John Doe",
@@ -51,7 +68,7 @@ const createFakeUsers = async () => {
         countryCode: countryCode,
         phoneNumber: faker.phone.imei(),
         bio: faker.lorem.sentence(),
-        avatar: faker.image.avatar(),
+        avatar: imagePath,
       });
       // Example: Add initial ratings
       const ratings = [];
@@ -73,6 +90,13 @@ const createFakeUsers = async () => {
   }
   process.exit();
 };
+interface MediaFile {
+  nom: string;
+  type: "image" | "video";
+}
+const fichiers: MediaFile[] = JSON.parse(
+  fs.readFileSync(path.join(__dirname, "fichiers.json"), "utf-8")
+);
 
 const createFakeItems = async () => {
   // deleteAllItems();
@@ -81,47 +105,54 @@ const createFakeItems = async () => {
   const categories = await categoryModel.find(); // Fetch all categories
 
   const conditions = ["new", "used"];
-  for (let i = 0; i < 200; i++) {
+  for (let i = 0; i < 30000; i++) {
     try {
       const seller = customers[Math.floor(Math.random() * customers.length)];
       const likes = [];
-      const numLikes = faker.datatype.number({ min: 0, max: 50 });
+      const numLikes = faker.number.int({ min: 0, max: 50 });
+
+      // Générer des likes aléatoires
       for (let j = 0; j < numLikes; j++) {
         const randomIndex = Math.floor(Math.random() * customers.length);
         likes.push(customers[randomIndex]._id);
       }
 
-      const media = [];
-      const totalMedia = faker.datatype.number({ min: 1, max: 8 });
-      for (let j = 0; j < totalMedia; j++) {
-        const isImage = faker.datatype.boolean();
-        media.push({
-          type: isImage ? "image" : "video",
-          url: isImage ? faker.image.imageUrl() : faker.internet.url(),
-        });
-      }
+      // Sélectionner des médias à partir du fichier JSON
 
+      // Sélectionner des images aléatoires
+      const availableImages = fichiers.filter((f) => f.type === "image");
+      const totalImages = faker.number.int({ min: 1, max: 8 });
+
+      const images = Array.from({ length: totalImages }, () => {
+        const selectedImage = faker.helpers.arrayElement(availableImages);
+        return selectedImage.nom; // Utiliser le nom de l'image
+      });
+
+      // Sélectionner des catégories aléatoires
       const selectedCategories = [];
-      const numCategories = faker.datatype.number({ min: 1, max: 5 });
+      const numCategories = faker.number.int({ min: 1, max: 5 });
       for (let k = 0; k < numCategories; k++) {
         const randomIndex = Math.floor(Math.random() * categories.length);
         selectedCategories.push(categories[randomIndex]._id);
       }
 
+      // Créer un nouvel item
       const newItem = await itemModel.create({
         title: faker.commerce.productName(),
         description: faker.lorem.paragraph(),
         price: parseFloat(faker.commerce.price()),
         categories: selectedCategories,
         condition: conditions[Math.floor(Math.random() * conditions.length)],
-        media: media,
+        images: images,
         seller: seller._id,
         likes: likes,
       });
-      seller.items.push(newItem._id); // Explicit cast to ObjectId
+
+      // Ajouter l'item au vendeur et sauvegarder
+      seller.items.push(newItem._id);
       await seller.save();
     } catch (error) {
-      console.log(error);
+      console.error("Erreur lors de la création des items:", error);
     }
   }
 
@@ -150,7 +181,7 @@ const deleteAllItemsAndRemoveReferences = async () => {
 };
 
 // CATEGORIES
-
+// Créations des catégories
 const seedCategories = async () => {
   try {
     // await categoryModel.deleteMany({}); // Clear existing categories
@@ -163,6 +194,7 @@ const seedCategories = async () => {
   }
 };
 
+// Suppression des articles
 const deleteAllItems = async () => {
   try {
     await itemModel.deleteMany({});
@@ -180,7 +212,7 @@ const generateRandomPhoneNumber = () => {
   const max = 999999999; // 9 chiffres maximum
   return Math.floor(Math.random() * (max - min + 1)) + min;
 };
-
+// Mise à jour de tous les numéros de téléphone
 const updateAllPhoneNumbers = async () => {
   try {
     // Connectez-vous à la base de données
@@ -211,6 +243,7 @@ const getRandomCountryCode = () => {
   return countryCodes[randomIndex];
 };
 
+// Fais la mise à jour des codes pays
 const addCountryCode = async () => {
   try {
     // Trouver tous les documents
@@ -247,6 +280,55 @@ const removeCountryField = async () => {
   }
 };
 
+// Ajouter une sous-categorys
+const addsubCategory = async () => {
+  try {
+    // Trouver tous les documents
+    const categories = await categoryModel.find({});
+    for (const category of categories) {
+      const responseCategories = allSubCategories.find((subCategory) => {
+        return subCategory.name === category.name;
+      });
+      if (responseCategories) {
+        for (const subCategory of responseCategories.subCategories) {
+          await subCategoryModel.create({
+            name: subCategory,
+            category: category._id,
+          });
+        }
+        // await subCategoryModel.create({
+        //   name: responseCategories.name,
+        //   category: category._id,
+        // });
+      }
+    }
+  } catch (error) {
+    console.error("Erreur lors de la mise à jour des utilisateurs:", error);
+  }
+};
+
+const Thanos = async () => {
+  // DELETE ALL DATA FROM DB
+  await deleteData(customerModel);
+  await deleteData(itemModel);
+  await deleteData(categoryModel);
+  await deleteData(subCategoryModel);
+  await deleteData(ratingModel);
+  await deleteData(customerModel);
+  // WHEN FINISH STOP
+  console.log("Fin operation");
+  process.exit();
+};
+
+// Cette fonction me permet de directement créer des données prédisposées à être utilisées dans mon application
+// Je commence par créer les catégories, sous catégories, utilisateurs, items
+// C'est l'opposé de Thanos
+const createAll = async () => {
+  await seedCategories();
+  await addsubCategory();
+  await createFakeUsers();
+  await createFakeItems();
+};
 if (process.argv[2] === "--import") {
   // importData();
 } else if (process.argv[2] === "--delete") {
@@ -269,4 +351,10 @@ if (process.argv[2] === "--import") {
   addCountryCode();
 } else if (process.argv[2] === "--deleteCountry") {
   removeCountryField();
+} else if (process.argv[2] === "--thanos") {
+  Thanos();
+} else if (process.argv[2] === "--addSubcategory") {
+  addsubCategory();
+} else if (process.argv[2] === "--createAll") {
+  createAll();
 }
